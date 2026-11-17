@@ -67,3 +67,37 @@ def test_logout(client, auth):
     with client:
         auth.logout()
         assert "user_id" not in session
+
+
+
+@pytest.mark.parametrize(
+    ("username", "password", "valid"),
+    (
+        ("nuevo1", "1234567", False),       # 7 caracteres: debe rechazar
+        ("nuevo2", "12345678", True),       # 8 caracteres: debe aceptar
+        ("nuevo3", "a", False),             # 1 caracter: debe rechazar
+        ("nuevo4", "123456789012", True),   # 12 caracteres: debe aceptar
+    ),
+)
+def test_register_password_length(client, app, username, password, valid):
+    # Enviamos el formulario de registro con el usuario y contraseña del caso
+    response = client.post(
+        "/auth/register", data={"username": username, "password": password}
+    )
+
+    # Buscamos en la base de datos si el usuario se ha creado
+    with app.app_context():
+        user = (
+            get_db()
+            .execute("SELECT * FROM user WHERE username = ?", (username,))
+            .fetchone()
+        )
+
+    if valid:
+        # Contraseña correcta: nos lleva al login y el usuario existe
+        assert response.headers["Location"] == "/auth/login"
+        assert user is not None
+    else:
+        # Contraseña corta: sale el mensaje de error y el usuario NO existe
+        assert b"at least 8 characters" in response.data
+        assert user is None
